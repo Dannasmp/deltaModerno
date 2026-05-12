@@ -3,6 +3,7 @@
     "name": "delta-moderno-definitivo",
     "slug": "delta-moderno-definitivo",
     "version": "1.0.0",
+    "scheme": "delta-moderno", 
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,6 +17,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.danna.deltamoderno",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
