@@ -1,157 +1,161 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Image, ActivityIndicator
+  View, Text, StyleSheet, FlatList, Image,
+  ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 const OXFORD_BLUE = "#002147";
 const PURPLE = "#5e17eb";
 const WHITE = "#FFFFFF";
 const USER_KEY = '@logs_v3_delta_user';
 
-// ✅ 500 registros falsos basados en la estructura del JSON que tienes
-const FAKE_ADVENTURES = [
-  { id: "529536ca-8d40-4d65-b918-a6ef54da9005", title: "bidet en North Maud", description: "Concedo spiritus ratione cauda. Somnus una tyrannus dignissimos sumo reprehenderit magni temperantia.", image: "https://picsum.photos/seed/m8IMuUC/800/600?grayscale&blur=10", difficulty: "Facil", coordinates: { lat: -68.679, lng: 166.0792 } },
-  { id: "af709bfa-329f-49cf-887b-5c922e70ab73", title: "moment en Lefflerbury", description: "Necessitatibus celer amoveo deficio magnam cohaero minus deserunt.", image: "https://picsum.photos/seed/9DvRxX8/800/600?blur=8", difficulty: "Facil", coordinates: { lat: -71.7156, lng: 18.223 } },
-  { id: "1654de98-a689-4ce7-bc74-830b184cc2a6", title: "derby en Cierracester", description: "Id comburo ratione vito vulnus. Attonbitus sollicito viriliter voluntarius.", image: "https://picsum.photos/seed/RHaxPX/800/600?blur=7", difficulty: "Moderado", coordinates: { lat: 67.4865, lng: 95.5538 } },
-  { id: "b0bda203-23ad-45f2-bf03-a643f3548a08", title: "insolence en North Isac", description: "Addo solvo urbs aeternus charisma corporis cuius stillicidium.", image: "https://picsum.photos/seed/DmbxXUE/800/600?blur=5", difficulty: "Dificil", coordinates: { lat: 17.9278, lng: -128.0113 } },
-  { id: "f8312e53-734f-4894-acc5-5ef17afb4b20", title: "stall en Binghamton", description: "Cuius curis conicio. Admitto dolorum corona vilicus volup voro vivo.", image: "https://picsum.photos/seed/IZzx5RtQ/800/600", difficulty: "Moderado", coordinates: { lat: 28.6239, lng: 44.1683 } },
-  // Los 495 restantes se generan automáticamente abajo
+const CIUDADES = [
+  "Bogotá","Lima","Santiago","Buenos Aires","Caracas","Quito",
+  "La Paz","Asunción","Montevideo","Brasilia","Ciudad de México",
+  "Guadalajara","Monterrey","San José","Panamá","Medellín",
+  "Cali","Barranquilla","Cartagena","Cusco",
 ];
 
-// ✅ Genera registros adicionales hasta completar 500
-const generarFaltantes = (existentes) => {
-  const total = 500;
-  const ciudades = ["Bogotá", "Lima", "Santiago", "Buenos Aires", "Caracas", "Quito", "La Paz", "Asunción", "Montevideo", "Brasilia", "Ciudad de México", "Guadalajara", "Monterrey", "San José", "Panamá", "Managua", "Tegucigalpa", "San Salvador", "Guatemala", "Havana"];
-  const zonas = ["Norte", "Sur", "Este", "Oeste", "Centro", "Alta", "Baja", "Interior", "Costera", "Montaña"];
-  const dificultades = ["Facil", "Moderado", "Dificil"];
-  const descripciones = [
-    "Zona de alta biodiversidad con cobertura boscosa densa y presencia de fauna endémica.",
-    "Área de monitoreo climático con registro histórico de precipitaciones y temperatura.",
-    "Sector con actividad geológica moderada, suelo arcilloso y presencia de sedimentos.",
-    "Punto de control hidrológico sobre cuenca media, caudal variable según estación.",
-    "Estación de observación satelital secundaria, coordenadas verificadas en campo.",
-    "Zona de transición ecológica entre ecosistema húmedo y seco, alta variabilidad.",
-    "Perímetro de reserva natural con restricción de acceso y protocolos especiales.",
-    "Área de reforestación activa, presencia de especies nativas en recuperación.",
-    "Sector urbano-periférico con indicadores de presión antrópica documentados.",
-    "Corredor biológico estratégico, monitoreo de especies migratorias en curso.",
-  ];
+const ZONAS = [
+  "Norte","Sur","Este","Oeste","Centro","Alta","Baja",
+  "Interior","Costera","Montaña","Fluvial","Andina",
+];
 
-  const extras = [];
-  for (let i = existentes.length; i < total; i++) {
-    const seed = Math.floor(Math.random() * 9000) + 1000;
-    const ciudad = ciudades[i % ciudades.length];
-    const zona = zonas[i % zonas.length];
-    const desc = descripciones[i % descripciones.length];
-    extras.push({
-      id: `fake-${i}`,
-      title: `Zona ${zona} en ${ciudad}`,
-      description: desc,
-      image: `https://picsum.photos/seed/${seed}/800/600`,
-      difficulty: dificultades[i % dificultades.length],
-      coordinates: {
-        lat: parseFloat((Math.random() * 180 - 90).toFixed(4)),
-        lng: parseFloat((Math.random() * 360 - 180).toFixed(4)),
-      },
-    });
-  }
-  return [...existentes, ...extras];
+const DESCRIPCIONES = [
+  "Zona de alta biodiversidad con cobertura boscosa densa y presencia de fauna endémica registrada.",
+  "Área de monitoreo climático con historial de precipitaciones y variaciones térmicas documentadas.",
+  "Sector con actividad geológica moderada, suelo arcilloso y presencia de sedimentos recientes.",
+  "Punto de control hidrológico sobre cuenca media, caudal variable según estación del año.",
+  "Estación de observación satelital secundaria, coordenadas verificadas en campo durante misión.",
+  "Zona de transición ecológica entre ecosistema húmedo y seco, alta variabilidad estacional.",
+  "Perímetro de reserva natural con restricción de acceso y protocolos especiales de ingreso.",
+  "Área de reforestación activa, presencia de especies nativas en proceso de recuperación.",
+  "Sector urbano-periférico con indicadores de presión antrópica documentados en última campaña.",
+  "Corredor biológico estratégico, monitoreo de especies migratorias en curso desde base DELTA.",
+];
+
+const DIFICULTADES = ["Facil", "Moderado", "Dificil"];
+
+const generarFalsos = (cantidad = 20) => {
+  return Array.from({ length: cantidad }, (_, i) => ({
+    id: `fake-${i}`,
+    title: `Zona ${ZONAS[i % ZONAS.length]} en ${CIUDADES[i % CIUDADES.length]}`,
+    description: DESCRIPCIONES[i % DESCRIPCIONES.length],
+    image: `https://picsum.photos/seed/${i + 100}/800/600`,
+    difficulty: DIFICULTADES[i % DIFICULTADES.length],
+    coordinates: {
+      lat: parseFloat((((i * 127) % 18000) / 100 - 90).toFixed(4)),
+      lng: parseFloat((((i * 251) % 36000) / 100 - 180).toFixed(4)),
+    },
+    esFalso: true,
+  }));
 };
 
-const TODOS_LOS_REGISTROS = generarFaltantes(FAKE_ADVENTURES); // 500 en total
-
-const HistorialScreen = () => {
-  const [logs, setLogs] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const cargarHistorial = async () => {
-      try {
-        const guardado = await AsyncStorage.getItem(USER_KEY);
-        const reales = guardado ? JSON.parse(guardado) : [];
-
-        // Combina registros reales (fotos capturadas) + 500 falsos
-        // Los reales van primero
-        const combinados = [
-          ...reales.map(r => ({
-            id: r.id?.toString(),
-            title: `Captura del ${r.date?.split(',')[0] ?? 'campo'}`,
-            description: `Registro fotográfico con coordenadas verificadas en campo.`,
-            image: r.url,
-            difficulty: "Moderado",
-            coordinates: {
-              lat: r.coords?.latitude ?? 0,
-              lng: r.coords?.longitude ?? 0,
-            },
-            date: r.date,
-          })),
-          ...TODOS_LOS_REGISTROS,
-        ];
-
-        setLogs(combinados);
-      } catch (e) {
-        console.error(e);
-        setLogs(TODOS_LOS_REGISTROS);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    cargarHistorial();
-  }, []);
-
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <Image
-        source={{ uri: item.image }}
-        style={styles.image}
-        resizeMode="cover"
-      />
-      <View style={styles.info}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <Text style={styles.description}>{item.description}</Text>
-
-        <View style={styles.badgeRow}>
-          <View style={[
-            styles.badge,
-            item.difficulty === 'Dificil' && { backgroundColor: '#c0392b' },
-            item.difficulty === 'Moderado' && { backgroundColor: '#e67e22' },
-            item.difficulty === 'Facil' && { backgroundColor: '#27ae60' },
-          ]}>
-            <Text style={styles.badgeText}>🎯 {item.difficulty}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.meta}>
-          📍 {item.coordinates.lat.toFixed(3)}, {item.coordinates.lng.toFixed(3)}
-        </Text>
-
-        {item.date && (
-          <Text style={styles.meta}>🕒 {item.date}</Text>
-        )}
-      </View>
+const DifficultyBadge = ({ difficulty }) => {
+  const color =
+    difficulty === 'Dificil' ? '#c0392b' :
+    difficulty === 'Moderado' ? '#e67e22' : '#27ae60';
+  return (
+    <View style={[styles.badge, { backgroundColor: color }]}>
+      <Text style={styles.badgeText}>🎯 {difficulty}</Text>
     </View>
   );
+};
+
+const RegistroCard = React.memo(({ item }) => (
+  <View style={[styles.card, item.esFalso ? null : styles.cardReal]}>
+    <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
+    {!item.esFalso && (
+      <View style={styles.realBadge}>
+        <Text style={styles.realBadgeText}>📸 Foto tuya</Text>
+      </View>
+    )}
+    <View style={styles.info}>
+      <Text style={styles.cardTitle}>{item.title}</Text>
+      <Text style={styles.description}>{item.description}</Text>
+      <View style={styles.badgeRow}>
+        <DifficultyBadge difficulty={item.difficulty} />
+      </View>
+      <Text style={styles.meta}>
+        📍 {item.coordinates.lat.toFixed(3)}, {item.coordinates.lng.toFixed(3)}
+      </Text>
+      {item.date && <Text style={styles.meta}>🕒 {item.date}</Text>}
+    </View>
+  </View>
+));
+
+const HistorialScreen = () => {
+  const [registros, setRegistros] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigation = useNavigation();
+
+  const cargarHistorial = useCallback(async () => {
+    try {
+      const guardado = await AsyncStorage.getItem(USER_KEY);
+      const reales = guardado ? JSON.parse(guardado) : [];
+
+      const realesFormateados = reales.map((r) => ({
+        id: `real-${r.id}`,
+        title: `📸 Captura — ${r.date?.split(',')[0] ?? 'Campo'}`,
+        description: 'Registro fotográfico con coordenadas verificadas en campo.',
+        image: r.url,
+        difficulty: 'Moderado',
+        coordinates: {
+          lat: r.coords?.latitude ?? 0,
+          lng: r.coords?.longitude ?? 0,
+        },
+        date: r.date,
+        esFalso: false,
+      }));
+
+      setRegistros([...realesFormateados, ...generarFalsos(20)]);
+    } catch (e) {
+      console.error(e);
+      setRegistros(generarFalsos(20));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', cargarHistorial);
+    return unsubscribe;
+  }, [navigation, cargarHistorial]);
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator color={PURPLE} size="large" />
-        <Text style={{ color: WHITE, marginTop: 12 }}>Cargando historial...</Text>
+        <Text style={styles.loadingText}>Cargando historial...</Text>
       </View>
     );
   }
 
+  const totalFotos = registros.filter(r => !r.esFalso).length;
+
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Historial DELTA</Text>
-      <Text style={styles.subheader}>{logs.length} registros encontrados</Text>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.header}>Historial DELTA</Text>
+          <Text style={styles.subheader}>
+            {registros.length} registros · {totalFotos} fotos tuyas
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.cameraBtn}
+          onPress={() => navigation.navigate('CameraScreen')}
+        >
+          <Text style={styles.cameraBtnText}>📷 Cámara</Text>
+        </TouchableOpacity>
+      </View>
 
       <FlatList
-        data={logs}
+        data={registros}
         keyExtractor={(item) => item.id?.toString()}
-        renderItem={renderItem}
+        renderItem={({ item }) => <RegistroCard item={item} />}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}
@@ -163,8 +167,14 @@ const HistorialScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: OXFORD_BLUE, paddingHorizontal: 15, paddingTop: 50 },
+  loadingContainer: { flex: 1, backgroundColor: OXFORD_BLUE, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { color: WHITE, marginTop: 12, fontSize: 14 },
+
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 15 },
   header: { color: WHITE, fontSize: 26, fontWeight: 'bold', marginBottom: 4 },
-  subheader: { color: '#aaa', fontSize: 13, marginBottom: 15 },
+  subheader: { color: '#aaa', fontSize: 13 },
+  cameraBtn: { backgroundColor: PURPLE, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  cameraBtnText: { color: WHITE, fontSize: 13, fontWeight: '600' },
 
   card: {
     marginBottom: 15,
@@ -174,26 +184,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2a2a4a',
   },
-
-  image: { width: '100%', height: 180 },
-
-  info: { padding: 12 },
-
-  cardTitle: { color: WHITE, fontSize: 16, fontWeight: 'bold', marginBottom: 6 },
-
-  description: { color: '#bbb', fontSize: 13, lineHeight: 19, marginBottom: 8 },
-
-  badgeRow: { flexDirection: 'row', marginBottom: 6 },
-
-  badge: {
+  cardReal: {
+    borderColor: PURPLE,
+    borderWidth: 2,
+  },
+  realBadge: {
+    position: 'absolute',
+    top: 10, left: 10,
     backgroundColor: PURPLE,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 20,
   },
-
+  realBadgeText: { color: WHITE, fontSize: 12, fontWeight: '600' },
+  image: { width: '100%', height: 180 },
+  info: { padding: 12 },
+  cardTitle: { color: WHITE, fontSize: 16, fontWeight: 'bold', marginBottom: 6 },
+  description: { color: '#bbb', fontSize: 13, lineHeight: 19, marginBottom: 8 },
+  badgeRow: { flexDirection: 'row', marginBottom: 6 },
+  badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
   badgeText: { color: WHITE, fontSize: 12, fontWeight: '600' },
-
   meta: { color: '#888', fontSize: 12, marginTop: 3 },
 });
 
